@@ -171,6 +171,90 @@ class TestConfigValidation(unittest.TestCase):
         self.assertEqual(merged["sender_limits"]["max_per_hour_per_platform"], 5)
 
 
+class _FakeEl:
+    """最小的 Playwright 元素替身：inner_text + 后代 query_selector。"""
+
+    def __init__(self, text, children=None):
+        self._text = text
+        self._children = children or {}
+
+    def inner_text(self):
+        return self._text
+
+    def query_selector(self, sel):
+        return self._children.get(sel)
+
+
+class TestLeafCommentExtraction(unittest.TestCase):
+    def test_normalize_collapses_whitespace(self):
+        from collector.base import BaseCollector
+        self.assertEqual(BaseCollector.normalize_text("  多少\n钱？  哪里\n买  "),
+                         "多少 钱？ 哪里 买")
+
+    def test_comment_body_prefers_child_node_over_container(self):
+        from collector.base import BaseCollector
+        # 容器文本混着昵称+点赞+时间，正文子节点才是干净评论。
+        body = _FakeEl("多少钱？哪里买？")
+        el = _FakeEl("昵称A  123赞  2小时前  多少钱？哪里买？  回复",
+                     {"[class*='comment-text']": body})
+        self.assertEqual(BaseCollector.comment_body(el), "多少钱？哪里买？")
+
+    def test_comment_body_falls_back_to_whole_text(self):
+        from collector.base import BaseCollector
+        el = _FakeEl("  想买一个  ")
+        self.assertEqual(BaseCollector.comment_body(el), "想买一个")
+
+    def test_has_nested_comment_skips_containers(self):
+        from collector.base import BaseCollector
+        leaf = _FakeEl("多少钱？")
+        container = _FakeEl("容器文本", {".comment-item": leaf})
+        self.assertFalse(BaseCollector.has_nested_comment(
+            leaf, (".comment-item",)))
+        self.assertTrue(BaseCollector.has_nested_comment(
+            container, (".comment-item",)))
+
+    def test_douyin_collector_dedups_normalized_text(self):
+        # 用假 page 跑 DouyinCollector.collect_comments：容器 + 两条
+        # 只有空白不同的同一评论，应只留一条，且正文取子节点。
+        from collector.douyin import DouyinCollector
+        body = _FakeEl("多少钱？\n哪里买？")
+        leaf1 = _FakeEl("昵称  多少钱？哪里买？",
+                        {"[class*='comment-text']": body,
+                         "a[href*='/user/']": None})
+        leaf2 = _FakeEl("昵称   多少钱？   哪里买？",
+                        {"[class*='comment-text']": _FakeEl("多少钱？   哪里买？"),
+                         "a[href*='/user/']": None})
+        container = _FakeEl("容器", {".comment-item": leaf1})
+
+        class FakePage:
+            def query_selector_all(self, sel):
+                return [container, leaf1, leaf2]
+
+        cfg = {"per_platform": {"max_contents": 3, "max_comments_per_content": 20},
+               "storage": {"auth_dir": "data/auth"},
+               "browser": {"storage_state_template": "data/auth/{platform}.json"}}
+        import sqlite3
+        col = DouyinCollector(cfg, sqlite3.connect(":memory:"))
+        col.scroll_down = lambda page, times=3, pause=None: None
+        out = col.collect_comments(FakePage(), {"url": "https://www.douyin.com/video/1"})
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["text"], "多少钱？ 哪里买？")
+
+
+class TestMinScoreValidation(unittest.TestCase):
+    def test_bad_min_score_returns_400_not_500(self):
+        import app.app as app_mod
+        for raw in ("abc", "1.5", "99", "-1", ""):
+            value, err = app_mod._parse_min_score({"min_score": [raw]})
+            self.assertIsNone(value, raw)
+            self.assertIn("min_score", err)
+        value, err = app_mod._parse_min_score({"min_score": ["2"]})
+        self.assertEqual(value, 2)
+        self.assertIsNone(err)
+        value, err = app_mod._parse_min_score({})
+        self.assertEqual(value, 0)
+
+
 class TestDraftVariation(unittest.TestCase):
     def test_three_variants_differ_and_pick_avoids_last(self):
         from scoring.scorer import make_draft_variants, pick_draft_variant

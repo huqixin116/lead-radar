@@ -37,11 +37,13 @@ class BilibiliCollector(BaseCollector):
     def collect_comments(self, page, content: dict):
         out, seen = [], set()
         self.scroll_down(page, times=4, pause=1.2)
+        # 选择器本身已是叶子 .reply-item，不改；只加嵌套跳过
+        # （子回复里也含 .reply-item）和正文优先取子节点、归一化去重。
         for el in page.query_selector_all(".reply-item, [class*='reply-item']"):
-            try:
-                text = (el.inner_text() or "").strip()
-            except Exception:
+            if self.has_nested_comment(
+                    el, (".reply-item", "[class*='reply-item']")):
                 continue
+            text = self.comment_body(el)
             if len(text) < 2 or len(text) > 500 or text in seen:
                 continue
             seen.add(text)

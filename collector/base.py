@@ -266,6 +266,59 @@ class BaseCollector:
             else:
                 time.sleep(pause)
 
+    # --- 评论抽取通用小工具：只取叶子评论，不取容器 ---
+    # 之前的问题：用 "[data-e2e='comment-list'] div, .comment-item,
+    # [class*='comment']" 这种宽泛选择器，会同时命中评论列表容器、
+    # 评论项和里面的子 div，同一条评论被抓多次，文本里还混着
+    # 昵称+点赞数+时间，打分就被污染了。下面三个方法是修法：
+    # 只取叶子项、跳过含嵌套评论项的容器、正文优先取子节点。
+
+    @staticmethod
+    def normalize_text(text) -> str:
+        """把空白（换行/多空格/制表符）折叠成单个空格并去首尾。"""
+        return " ".join(str(text or "").split())
+
+    @staticmethod
+    def comment_body(el, body_selectors=("[class*='comment-text']",
+                                          "[class*='content']",
+                                          "[class*='text']")) -> str:
+        """先试正文子节点，再回退到整块 inner_text。
+
+        正文子节点优先：容器里常混着昵称、点赞、时间、回复按钮，
+        直接取整块文本会把这些都算进评论。取不到子节点时才回退。
+        """
+        for sel in body_selectors:
+            try:
+                node = el.query_selector(sel)
+            except Exception:
+                node = None
+            if node is not None:
+                try:
+                    text = BaseCollector.normalize_text(node.inner_text())
+                except Exception:
+                    text = ""
+                if len(text) >= 2:
+                    return text
+        try:
+            return BaseCollector.normalize_text(el.inner_text())
+        except Exception:
+            return ""
+
+    @staticmethod
+    def has_nested_comment(el, nested_selectors) -> bool:
+        """元素内部是否还含另一个评论项（是容器，不是叶子）。
+
+        Playwright 的 query_selector 只搜后代、不含自身，
+        所以叶子项返回 False，容器返回 True。
+        """
+        for sel in nested_selectors:
+            try:
+                if el.query_selector(sel) is not None:
+                    return True
+            except Exception:
+                continue
+        return False
+
     def _check_page_risk(self, page) -> bool:
         """页面出现风控词返回 True（调用方应立刻停）。"""
         from tools.risk import detect_risk

@@ -46,16 +46,22 @@ class DouyinCollector(BaseCollector):
     def collect_comments(self, page, content: dict):
         out = []
         self.scroll_down(page, times=4, pause=1.2)
-        # 评论区容器有多种写法，逐个试
+        # 只取叶子评论项，不取容器：以前用
+        # "[data-e2e='comment-list'] div, .comment-item, [class*='comment']"
+        # 会同时命中列表容器、评论项和里面的子 div，同一条评论抓多次，
+        # 文本里还混着昵称+点赞+时间。现在只取 .comment-item 或
+        # 列表的直接子元素，含嵌套评论项的容器直接跳过。
         containers = page.query_selector_all(
-            "[data-e2e='comment-list'] div, .comment-item, [class*='comment']"
+            ".comment-item, [data-e2e='comment-list'] > *"
         )
         seen = set()
         for el in containers:
-            try:
-                text = (el.inner_text() or "").strip()
-            except Exception:
+            if self.has_nested_comment(
+                    el, (".comment-item", "[data-e2e='comment-list']")):
                 continue
+            # 正文优先取子节点（.comment-text / .content / .text），
+            # 取不到才回退到整块文本；空白折叠后按归一化文本去重。
+            text = self.comment_body(el)
             if len(text) < 2 or len(text) > 500 or text in seen:
                 continue
             seen.add(text)

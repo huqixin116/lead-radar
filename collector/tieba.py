@@ -37,11 +37,17 @@ class TiebaCollector(BaseCollector):
     def collect_comments(self, page, content: dict):
         out, seen = [], set()
         self.scroll_down(page, times=3, pause=1.2)
+        # 选择器本身已是叶子 .l_post、正文已优先取 .d_post_content，
+        # 不改；只加嵌套跳过和空白归一化去重（原来按原始文本去重，
+        # 换行/空格不同会被当成两条）。
         for el in page.query_selector_all(".l_post, [class*='l_post']"):
+            if self.has_nested_comment(el, (".l_post", "[class*='l_post']")):
+                continue
             try:
                 # 回帖正文优先取 .d_post_content
                 body = el.query_selector(".d_post_content")
-                text = (body.inner_text() if body else el.inner_text() or "").strip()
+                text = self.normalize_text(
+                    body.inner_text() if body else el.inner_text() or "")
             except Exception:
                 continue
             if len(text) < 2 or len(text) > 500 or text in seen:

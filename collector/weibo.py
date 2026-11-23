@@ -36,11 +36,14 @@ class WeiboCollector(BaseCollector):
     def collect_comments(self, page, content: dict):
         out, seen = [], set()
         self.scroll_down(page, times=3, pause=1.2)
-        for el in page.query_selector_all("[class*='comment'], .list_li"):
-            try:
-                text = (el.inner_text() or "").strip()
-            except Exception:
+        # 同抖音的修法：去掉宽泛的 [class*='comment']（会命中容器），
+        # 只取叶子 .list_li / [class*='comment-item']，跳过含嵌套评论项
+        # 的容器，正文优先取子节点。
+        for el in page.query_selector_all(".list_li, [class*='comment-item']"):
+            if self.has_nested_comment(
+                    el, (".list_li", "[class*='comment-item']")):
                 continue
+            text = self.comment_body(el)
             if len(text) < 2 or len(text) > 500 or text in seen:
                 continue
             seen.add(text)
