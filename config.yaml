@@ -1,0 +1,103 @@
+# lead-radar 配置示例
+# 使用前必须改：product_name 和 keywords
+# 首次真实运行请只做小批量：1 个关键词、每平台 3 条内容、每条 20 条评论
+
+product_name: "示例产品（请替换为你的产品名）"
+product_intro: "示例介绍（请替换为一句话产品介绍，不要放微信号、手机号、外链）"
+
+# 关键词：3-5 个，先从最精准的一个开始测
+keywords:
+  - "示例关键词1"
+  - "示例关键词2"
+  - "示例关键词3"
+
+# 要跑的平台：douyin / xiaohongshu / bilibili / weibo / tieba
+platforms:
+  - douyin
+  - xiaohongshu
+  - bilibili
+  - weibo
+  - tieba
+
+# 每平台、每关键词最多抓多少条内容
+per_platform:
+  max_contents: 3
+  max_comments_per_content: 20
+
+# 意向词：命中越高分。按你的品类自己加
+intent_keywords:
+  buy:
+    - "多少钱"
+    - "多少米"
+    - "价格"
+    - "哪里买"
+    - "在哪买"
+    - "哪儿买"
+    - "求链接"
+    - "求购买"
+    - "怎么买"
+    - "如何购买"
+    - "想买"
+    - "入手"
+    - "下单"
+    - "推荐"
+    - "求推荐"
+    - "有货"
+    - "现货"
+    - "包邮"
+  negative:
+    - "广告"
+    - "骗子"
+    - "诈骗"
+    - "别买"
+    - "垃圾"
+    - "刷单"
+    - "免费送"
+    - "抽奖"
+    - "加微信"
+    - "加我微信"
+
+# 发送限制：单条人工确认发送，不群发
+sender_limits:
+  max_per_day_per_platform: 20
+  # 每小时上限：默认 5，界面里最多只能设到 10，超过会被校验拒绝
+  max_per_hour_per_platform: 5
+  min_delay_seconds: 60
+  max_delay_seconds: 180
+  # 只在这些小时内人工发送（北京时间），其余时间 sender 会拒绝
+  active_hours_start: 9
+  active_hours_end: 21
+
+# 采集节奏：基础等待 + 随机抖动，单并发，永远不要调高并发
+crawler:
+  max_sleep_sec: 2
+  jitter_sec: 3
+  max_concurrency: 1
+
+# 代理：默认关闭。开启后只走你自己填的静态代理，不内置任何代理商。
+# 没开代理时看板会显示风险横幅：请用住宅/手机流量，不要用共享 VPN/服务器 IP。
+proxy:
+  enable_ip_proxy: false
+  provider: static
+  static_proxy_url: ""
+  pool_count: 2
+
+# 存储
+storage:
+  db_path: "data/leads.db"
+  export_dir: "data/exports"
+  auth_dir: "data/auth"
+
+# 浏览器：默认有界面（headful），方便扫码登录和人工确认
+browser:
+  headless: false
+  # 每个平台登录态文件：data/auth/douyin.json 等，由 login 命令生成
+  storage_state_template: "data/auth/{platform}.json"
+  # CDP 模式：默认开启。先尝试连你本机已打开的真实 Chrome/Edge
+  #（--remote-debugging-port=9222），连不上再退回 Playwright 自带的
+  # launch_persistent_context，每个平台独立 user_data_dir，窗口 1920x1080。
+  cdp_mode: true
+  # 你本机 Chrome/Edge 的完整路径，留空自动检测。界面上只显示、不建议乱改。
+  custom_browser_path: ""
+  cdp_port: 9222
+  connect_existing: true

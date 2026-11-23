@@ -1,0 +1,6 @@
+# Python 3.11+，Mac / Windows 通用
+playwright>=1.44
+PyYAML>=6.0
+# 注意：装完还要装浏览器
+#   playwright install chromium
+# app 面板只用 Python 标准库 http.server，不依赖 Flask/FastAPI

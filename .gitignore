@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.db
+*.log
+*.bak
+data/
+config.yaml.bak
